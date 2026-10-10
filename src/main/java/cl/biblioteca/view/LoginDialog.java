@@ -1,0 +1,8 @@
+package cl.biblioteca.view;
+import cl.biblioteca.dao.UsuarioDAO; import cl.biblioteca.model.Usuario; import javax.swing.*; import java.awt.*;
+public class LoginDialog extends JDialog {
+ private Usuario usuario; private final JTextField login=new JTextField(18); private final JPasswordField password=new JPasswordField(18);
+ public LoginDialog(Frame owner){super(owner,"Acceso a Biblioteca Escolar",true);setDefaultCloseOperation(DISPOSE_ON_CLOSE);setLayout(new BorderLayout(12,12));JPanel form=new JPanel(new GridLayout(0,2,8,8));form.setBorder(BorderFactory.createEmptyBorder(18,18,8,18));form.add(new JLabel("Correo o RUT:"));form.add(login);form.add(new JLabel("Contraseña:"));form.add(password);add(new JLabel("<html><h2>Biblioteca Escolar</h2><p>Ingresa con tu cuenta registrada</p></html>",SwingConstants.CENTER),BorderLayout.NORTH);add(form,BorderLayout.CENTER);JButton entrar=new JButton("Ingresar");entrar.addActionListener(e->autenticar());JPanel bottom=new JPanel();bottom.add(entrar);add(bottom,BorderLayout.SOUTH);getRootPane().setDefaultButton(entrar);pack();setLocationRelativeTo(owner);}
+ private void autenticar(){try{usuario=new UsuarioDAO().autenticar(login.getText().trim(),new String(password.getPassword()));if(usuario==null){JOptionPane.showMessageDialog(this,"Credenciales incorrectas.","Acceso denegado",JOptionPane.WARNING_MESSAGE);return;}dispose();}catch(Exception e){JOptionPane.showMessageDialog(this,"No fue posible conectar con MySQL. Revisa la base de datos y la configuración.\nDetalle: "+e.getMessage(),"Error de conexión",JOptionPane.ERROR_MESSAGE);}}
+ public Usuario getUsuarioAutenticado(){return usuario;}
+}

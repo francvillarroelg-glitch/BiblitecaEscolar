@@ -1,0 +1,19 @@
+package cl.biblioteca.dao;
+import cl.biblioteca.config.DatabaseConnection; import cl.biblioteca.model.Prestamo; import java.sql.*; import java.time.LocalDate; import java.util.*;
+public class PrestamoDAO {
+ private final LibroDAO libroDAO=new LibroDAO();
+ public synchronized void registrar(int estudianteId,int libroId)throws SQLException {
+  try(Connection c=DatabaseConnection.getInstance().getConnection()) {c.setAutoCommit(false);try {
+   try(PreparedStatement check=c.prepareStatement("SELECT stock FROM libros WHERE id=? FOR UPDATE")){check.setInt(1,libroId);try(ResultSet r=check.executeQuery()){if(!r.next()||r.getInt(1)<=0)throw new SQLException("No hay stock disponible para ese libro.");}}
+   libroDAO.cambiarStock(c,libroId,-1);
+   try(PreparedStatement p=c.prepareStatement("INSERT INTO prestamos(id_estudiante,id_libro,fecha_prestamo,fecha_devolucion,devuelto) VALUES(?,?,?, ?,FALSE)")){p.setInt(1,estudianteId);p.setInt(2,libroId);p.setDate(3,java.sql.Date.valueOf(LocalDate.now()));p.setDate(4,java.sql.Date.valueOf(LocalDate.now().plusDays(14)));p.executeUpdate();}
+   c.commit();
+  }catch(SQLException ex){c.rollback();throw ex;}finally{c.setAutoCommit(true);}}
+ }
+ public void devolver(int id)throws SQLException{try(Connection c=DatabaseConnection.getInstance().getConnection()){c.setAutoCommit(false);try{int libro;try(PreparedStatement p=c.prepareStatement("SELECT id_libro FROM prestamos WHERE id=? AND devuelto=FALSE FOR UPDATE")){p.setInt(1,id);try(ResultSet r=p.executeQuery()){if(!r.next())throw new SQLException("Préstamo no encontrado o ya devuelto.");libro=r.getInt(1);}}try(PreparedStatement p=c.prepareStatement("UPDATE prestamos SET devuelto=TRUE WHERE id=?")){p.setInt(1,id);p.executeUpdate();}libroDAO.cambiarStock(c,libro,1);c.commit();}catch(SQLException e){c.rollback();throw e;}finally{c.setAutoCommit(true);}}}
+ public List<Prestamo> listar()throws SQLException{String s="SELECT p.*,e.nombre estudiante,l.titulo libro FROM prestamos p JOIN estudiantes e ON e.id=p.id_estudiante JOIN libros l ON l.id=p.id_libro ORDER BY p.id DESC";List<Prestamo>a=new ArrayList<>();try(Connection c=DatabaseConnection.getInstance().getConnection();PreparedStatement p=c.prepareStatement(s);ResultSet r=p.executeQuery()){while(r.next())a.add(map(r));}return a;}
+ public List<Prestamo> activos()throws SQLException{List<Prestamo>a=new ArrayList<>();for(Prestamo p:listar())if(!p.isDevuelto())a.add(p);return a;}
+ private Prestamo map(ResultSet r)throws SQLException{return new Prestamo(r.getInt("id"),r.getInt("id_estudiante"),r.getInt("id_libro"),r.getString("estudiante"),r.getString("libro"),r.getDate("fecha_prestamo").toLocalDate(),r.getDate("fecha_devolucion").toLocalDate(),r.getBoolean("devuelto"));}
+ public List<String> masPrestados()throws SQLException{List<String>a=new ArrayList<>();String s="SELECT l.titulo,COUNT(*) total FROM prestamos p JOIN libros l ON l.id=p.id_libro GROUP BY l.id,l.titulo ORDER BY total DESC,l.titulo LIMIT 10";try(Connection c=DatabaseConnection.getInstance().getConnection();PreparedStatement p=c.prepareStatement(s);ResultSet r=p.executeQuery()){while(r.next())a.add(r.getString(1)+" — "+r.getInt(2)+" préstamo(s)");}return a;}
+ public List<String> historial(int estudianteId)throws SQLException{List<String>a=new ArrayList<>();String s="SELECT p.id,l.titulo,p.fecha_prestamo,p.fecha_devolucion,p.devuelto FROM prestamos p JOIN libros l ON l.id=p.id_libro WHERE p.id_estudiante=? ORDER BY p.fecha_prestamo DESC";try(Connection c=DatabaseConnection.getInstance().getConnection();PreparedStatement p=c.prepareStatement(s)){p.setInt(1,estudianteId);try(ResultSet r=p.executeQuery()){while(r.next())a.add("#"+r.getInt(1)+" | "+r.getString(2)+" | préstamo: "+r.getDate(3)+" | vence: "+r.getDate(4)+" | "+(r.getBoolean(5)?"Devuelto":"Pendiente"));}}return a;}
+}
